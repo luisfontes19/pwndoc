@@ -8,6 +8,7 @@ var Paragraph = {
 
 var customField = {
     _id:        false,
+    customField:  {type: Schema.Types.ObjectId, ref: 'CustomField'},
     label:      String,
     fieldType:  String,
     text:       String
@@ -15,6 +16,7 @@ var customField = {
 
 var Finding = {
     id:                     Schema.Types.ObjectId,
+    identifier:             Number, //incremental ID to be shown in the report
     title:                  String,
     vulnType:               String,
     description:            String,
@@ -104,6 +106,13 @@ AuditSchema.statics.getAudit = (isAdmin, auditId, userId) => {
         query.populate('company')
         query.populate('client')
         query.populate('collaborators', 'username firstname lastname role')
+        query.populate({
+            path: 'findings',
+            populate: {
+                path: 'customFields.customField',
+                select: 'label fieldType text displayFinding displayCategory'
+            }
+        })
         query.exec()
         .then((row) => {
             if (!row)
@@ -259,12 +268,16 @@ AuditSchema.statics.updateNetwork = (isAdmin, auditId, userId, scope) => {
 // Create finding
 AuditSchema.statics.createFinding = (isAdmin, auditId, userId, finding) => {
     return new Promise((resolve, reject) => { 
-        var query = Audit
-            .findByIdAndUpdate(auditId, {$push: {findings: {$each: [finding], $sort: {cvssScore: -1}}}})
-            .collation({locale: "en_US", numericOrdering: true})
-        if (!isAdmin)
-            query.or([{creator: userId}, {collaborators: userId}])
-        query.exec()
+        Audit.getLastFindingIdentifier(auditId)
+        .then(identifier => {
+            finding.identifier = ++identifier
+            
+            var query = Audit
+                .findByIdAndUpdate(auditId, {$push: {findings: {$each: [finding], $sort: {cvssScore: -1}}}})
+                .collation({locale: "en_US", numericOrdering: true})
+            if (!isAdmin)
+                query.or([{creator: userId}, {collaborators: userId}])
+            return query.exec()
         .then(row => {
             if (!row)
                 throw({fn: 'NotFound', message: 'Audit not found'})
@@ -275,7 +288,29 @@ AuditSchema.statics.createFinding = (isAdmin, auditId, userId, finding) => {
             reject(err)
         })
     })
+})
 }
+
+AuditSchema.statics.getLastFindingIdentifier = (auditId) => {
+    return new Promise((resolve, reject) => {
+        var query = Audit.aggregate([{ $match: {_id: mongoose.Types.ObjectId(auditId)} }])
+        query.unwind('findings')
+        query.sort({'findings.identifier': -1})
+        query.exec()
+        .then(row => {
+            if (!row)
+                throw ({ fn: 'NotFound', message: 'Audit not found' })
+            else if (row.length === 0 || !row[0].findings.identifier)
+                resolve(0)
+            else
+                resolve(row[0].findings.identifier);
+        })
+        .catch((err) => {
+            reject(err)
+        })
+    })
+};
+
 
 // Get findings list titles
 AuditSchema.statics.getFindings = (isAdmin, auditId, userId) => {
