@@ -80,7 +80,7 @@
 									>{{(finding.cvssSeverity)?finding.cvssSeverity.substring(0,1):"N"}}</q-chip>
 								</q-item-section>
 								<q-item-section>
-									<span>{{finding.title}}</span>
+									<span>{{displayIdentifier(finding)}} {{finding.title}}</span>
 								</q-item-section>
 								<q-item-section side v-if="finding.status === 0">
 									<q-icon name="check" color="green" />
@@ -218,6 +218,7 @@ export default {
 		},
 
 		methods: {
+			
 			getFindingColor: function(finding) {
 				if (finding.cvssSeverity && finding.cvssSeverity !== "None") {
 					if (finding.cvssSeverity === "Low") return "green"
@@ -233,6 +234,15 @@ export default {
 				}
 				return "light-blue";
 			},
+
+			displayIdentifier: function(finding) {
+				var formatIdentifier = (identifier) => {
+					return identifier <= 999 ?  ("00" + identifier).slice(-3) : identifier;
+				}
+				var calculatedIdentifier = finding.identifier + ((this.audit.idStart || 1 )- 1);
+				return `${this.audit.idPrefix}${formatIdentifier(calculatedIdentifier)}`; 
+			},
+			
 
 			// Sockets handle
 			handleSocket: function() {

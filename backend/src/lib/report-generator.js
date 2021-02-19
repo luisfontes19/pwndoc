@@ -359,7 +359,7 @@ function prepAuditData(data) {
             affected: finding.scope || "",
             status: finding.status || "",
             category: finding.category || "",
-            identifier: "IDX-" + utils.lPad(finding.identifier)
+            identifier: data.idPrefix + utils.lPad((finding.identifier || 1 ) + (data.idStart || 1) - 1)
         }
         if (finding.customFields) {
             finding.customFields.forEach(field => {

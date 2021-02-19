@@ -187,8 +187,7 @@ List of findings. Array of Objects:
 * **findings[i].category**
 * **findings[i].identifier**
 
-Identifier consists on a sequential id for the reported vulnerability pre-pended with 'IDX-'. Ex: IDX-001.
-You can replace the prefix by using the filter ```changeID```
+Identifier consists on a sequential id prepended with the field "ID Prefix" defined in the audit general page. By default the prefix is '#'
 
 Additional fields will also be added to the findings Array. The key will be lowercase + strip sapces of the label.  
 Eg. if Custom Field label is `Aggravating Factors` it will be added to the array as `findings[i].aggravatingfactors`.
@@ -196,7 +195,7 @@ Eg. if Custom Field label is `Aggravating Factors` it will be added to the array
 > Use in template document
 >```
 List of Findings{#findings}
-{identifier | changeID: 'PROJ1-'}    {title}    {vulnType}
+{identifier}    {title}    {vulnType}
 >  
 Severity: {cvssSeverity}    Score: {cvssScore}
 Attack Vector: cvssObj.AV               Scope: cvssObj.S
@@ -264,13 +263,6 @@ There should now be abstractNum definition for each one.
 
 Filters allow to apply functions on Audit data values.
 
-### changeID
-
-Replaces the default identifier prefix (IDX-) by the supplied prefix
-> Use in template document
->```
-{identifier | changeID: 'PROJ1-'}
->```
 
 ### convertDate
 

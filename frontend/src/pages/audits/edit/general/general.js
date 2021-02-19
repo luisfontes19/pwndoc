@@ -28,7 +28,9 @@ export default {
                 // date_end: "",
                 // scope: [],
                 // language: "",
-                // template: ""
+                // template: "",
+                // idPrefix: ""
+                // idStart: 1
             },
             auditOrig: {},
             // List of existing clients
@@ -44,7 +46,7 @@ export default {
             // List of existing Languages
             languages: [],
             // List of existing audit types
-            auditTypes: []
+            auditTypes: [],
         }
     },
 
