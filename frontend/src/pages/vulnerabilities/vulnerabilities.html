@@ -274,6 +274,7 @@
             v-model="currentVulnerability.details[currentDetailsIndex].customFields" 
             :category="currentVulnerability.category" 
             custom-element="QCardSection"
+            :custom-fields="customFields"
             display="vuln"
             />
         </q-expansion-item>
@@ -426,6 +427,7 @@
             v-model="currentVulnerability.details[currentDetailsIndex].customFields" 
             :category="currentVulnerability.category" 
             custom-element="QCardSection"
+            :custom-fields="customFields"
             display="vuln"
             />
         </q-expansion-item>
@@ -567,6 +569,7 @@
                             v-model="currentVulnerability.details[currentDetailsIndex].customFields" 
                             :category="currentVulnerability.category" 
                             custom-element="QCardSection"
+                            :custom-fields="customFields"
                             display="vuln"
                             />
                         </div>
@@ -746,7 +749,7 @@
                                     v-if="field.customField && (field.customField.displayVuln || field.customField.displayCategory.includes(currentVulnerability.category))"
                                     >
                                         <q-field 
-                                        v-if="field.customField.fieldType === 'text'" 
+                                        v-if="field.customField.fieldType === 'Text'" 
                                         borderless 
                                         :label="field.customField.label" 
                                         stack-label
@@ -760,13 +763,15 @@
                                             </template>
                                         </q-field>
                                         <q-input
-                                        v-if="field.customField.fieldType === 'input'"
+                                        v-if="field.customField.fieldType === 'Input'"
                                         :label='field.customField.label'
                                         stack-label
                                         v-model="field.text"
                                         readonly
                                         :bg-color="(isTextInCustomFields(field))?'red-1':''"
                                         />
+                                        <q-select v-if="field.fieldType === 'List'" :label="field.label" v-model="field.text"
+                                            :options="optionsForCustomField(field.label)" stack-label map-options options-sanitize />
                                     </q-card-section>
                                 </div>
                             </q-expansion-item>

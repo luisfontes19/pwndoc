@@ -2,7 +2,7 @@
 <div>
     <component :is="customElement" v-for="field of displayFields" :key="field.label">
         <q-field 
-        v-if="field.fieldType === 'text'" 
+        v-if="field.fieldType === 'Text'" 
         :label="field.label" 
         stack-label 
         borderless
@@ -17,11 +17,19 @@
         </q-field>
 
         <q-input
-        v-if="field.fieldType === 'input'"
+        v-if="field.fieldType === 'Input'"
         :label='field.label'
         stack-label
         v-model="field.text"
         />
+
+        <q-select 
+        v-if="field.fieldType === 'List'" 
+        :label="field.label" 
+        v-model="field.text"
+        :options="optionsForCustomField(field.label)" 
+        stack-label map-options options-sanitize />
+
     </component>
 </div>
 </template>
@@ -47,7 +55,8 @@ export default {
         display: { // value should be 'vuln' or 'finding'
             type: String,
             default: ''
-        }
+        },
+        customFields: Array
     },
 
     data: function() {
@@ -71,7 +80,10 @@ export default {
     },
 
     methods: {
-       
+        // find a custom field by its label name
+        optionsForCustomField: function(label){
+            return this.customFields.find(f => f.label === label).values
+        },
     }
 }
 

@@ -24,6 +24,7 @@
         <q-tab name="definition" default label="Definition" />
         <q-tab name="proofs" label="Proofs"/>
         <q-tab name="details" label="Details" />
+        <q-tab name="customFields" label="Custom Fields" v-if="finding.customFields && finding.customFields.length > 0"/>
         <q-separator vertical />
         <q-toggle label="Completed" v-model="finding.status" :true-value=0 :false-value=1 checked-icon="check" unchecked-icon="clear" color="green" />
         <q-space />
@@ -57,23 +58,6 @@
                         </q-field>
                         <textarea-array class="col-md-12" label="References (One per line)" v-model="finding.references" />
                 </q-card-section>
-
-                <q-expansion-item 
-                label="Custom Fields"
-                v-if="finding.customFields && finding.customFields.length > 0"
-                default-opened
-                header-class="bg-blue-grey-5 text-white" 
-                expand-icon-class="text-white">
-                    <custom-fields 
-                    ref="customfields" 
-                    v-model="finding.customFields" 
-                    :category="finding.category" 
-                    custom-element="QCardSection" 
-                    no-sync-editor
-                    display="finding"
-                    />
-                </q-expansion-item>
-
             </q-card>
         </q-tab-panel>
         <q-tab-panel name="proofs">
@@ -145,6 +129,21 @@
                     </template>
                 </q-field>
             </q-card-section>
+        </q-card>
+    </q-tab-panel>
+    <q-tab-panel name="customFields">
+        <q-card>
+            <q-card-section>
+                <custom-fields 
+                    ref="customfields" 
+                    v-model="finding.customFields" 
+                    :category="finding.category" 
+                    custom-element="QCardSection" 
+                    :custom-fields="customFields"
+                    no-sync-editor
+                    display="finding"
+                    />
+           </q-card-section>
         </q-card>
     </q-tab-panel>
     </q-tab-panels>

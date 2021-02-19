@@ -32,7 +32,7 @@ export default {
             editCategory: false,
 
             customFields: [],
-            newCustomField: {label: "", fieldType: "", vulnerability: false, finding: false, categories: []},
+            newCustomField: {label: "", fieldType: "", vulnerability: false, finding: false, categories: [], values: []},
             editCustomFields: [],
             editCustomField: false,
 
@@ -363,6 +363,12 @@ export default {
             .catch((err) => {
                 console.log(err)
             })
+        },
+
+        addCustomFieldListValue: function (customFieldIndex) {
+            var field = this.customFields[customFieldIndex]
+            field.values.push("")
+            this.$set(this.customFields, customFieldIndex, field)
         },
 
         // Create custom field
