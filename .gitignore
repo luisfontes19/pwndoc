@@ -10,6 +10,7 @@ mongo-data*
 report-templates
 custom-generator.js
 roles.json
+.env
 
 # Editor directories and files
 .idea
