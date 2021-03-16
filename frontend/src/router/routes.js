@@ -11,7 +11,6 @@ export default [
         {path: 'network', component: () => import('pages/audits/edit/network')},
         {path: 'findings/add', component: () => import('pages/audits/edit/findings/add')},
         {path: 'findings/:findingId', component: () => import('pages/audits/edit/findings/edit')},
-        {path: 'summary', component: () => import('pages/audits/edit/summary')},
         {path: 'sections/:sectionId', component: () => import('pages/audits/edit/sections')}
       ]}
     ]},
@@ -22,12 +21,7 @@ export default [
       {path: 'clients', component: () => import('pages/datas/clients')},
       {path: 'templates', component: () => import('pages/datas/templates')},   
       {path: 'dump', component: () => import('pages/datas/dump')},
-      {path: 'custom', component: () => import('pages/datas/custom'), beforeEnter(to, from, next) {
-        if (UserService.isAdmin()) 
-          next()
-        else
-          next({path: '/audits'})
-      }}
+      {path: 'custom', component: () => import('pages/datas/custom')}
     ]},
     {path: 'vulnerabilities', component: () => import('pages/vulnerabilities'), meta: {breadcrumb: 'Vulnerabilities'}},
     {path: 'profile', component: () => import('pages/profile')},

@@ -1,9 +1,10 @@
-FROM node:10.15.2-alpine
+FROM node:lts-alpine
 
 RUN mkdir -p /app
 WORKDIR /app
 COPY package*.json ./
 RUN apk --no-cache add --virtual builds-deps build-base python
 ENV NODE_ENV test
+ENV NODE_ICU_DATA=node_modules/full-icu
 RUN npm install
 ENTRYPOINT ["npm", "run", "test"]

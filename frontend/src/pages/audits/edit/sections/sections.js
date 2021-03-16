@@ -1,7 +1,7 @@
 import { Notify, Dialog } from 'quasar';
 
-import Breadcrumb from 'components/breadcrumb';
 import BasicEditor from 'components/editor';
+import Breadcrumb from 'components/breadcrumb';
 
 import AuditService from '@/services/audit';
 import Utils from '@/services/utils';
@@ -38,32 +38,32 @@ export default {
 
     beforeRouteLeave (to, from , next) {
         Utils.syncEditors(this.$refs)
-        if (this.$_.isEqual(this.section, this.sectionOrig))
-            next();
-        else {
+        if (this.unsavedChanges()) {
             Dialog.create({
-                title: 'There are unsaved changes !',
-                message: `Do you really want to leave ?`,
-                ok: {label: 'Confirm', color: 'negative'},
-                cancel: {label: 'Cancel', color: 'white'}
+            title: 'There are unsaved changes !',
+            message: `Do you really want to leave ?`,
+            ok: {label: 'Confirm', color: 'negative'},
+            cancel: {label: 'Cancel', color: 'white'}
             })
             .onOk(() => next())
         }
+        else
+            next()
     },
 
     beforeRouteUpdate (to, from , next) {
         Utils.syncEditors(this.$refs)
-        if (this.$_.isEqual(this.section, this.sectionOrig))
-            next();
-        else {
+        if (this.unsavedChanges()) {
             Dialog.create({
-                title: 'There are unsaved changes !',
-                message: `Do you really want to leave ?`,
-                ok: {label: 'Confirm', color: 'negative'},
-                cancel: {label: 'Cancel', color: 'white'}
+            title: 'There are unsaved changes !',
+            message: `Do you really want to leave ?`,
+            ok: {label: 'Confirm', color: 'negative'},
+            cancel: {label: 'Cancel', color: 'white'}
             })
             .onOk(() => next())
         }
+        else
+            next()
     },
 
     methods: {
@@ -79,7 +79,10 @@ export default {
             AuditService.getSection(this.auditId, this.sectionId)
             .then((data) => {
                 this.section = data.data.datas;
-                this.sectionOrig = this.$_.cloneDeep(this.section);                
+                this.$nextTick(() => {
+                    Utils.syncEditors(this.$refs)
+                    this.sectionOrig = this.$_.cloneDeep(this.section);                
+                })
             })
             .catch((err) => {
                 console.log(err)
@@ -144,6 +147,13 @@ export default {
                     })
                 })
             })
+        },
+
+        unsavedChanges: function() {  
+            if ((this.section.text || this.sectionOrig.text) && this.section.text !== this.sectionOrig.text)
+                return true
+
+            return false
         }
     }
 }

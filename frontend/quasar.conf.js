@@ -21,7 +21,6 @@ module.exports = function (ctx) {
       'mdi-v4',
       'roboto-font'
     ],
-    supportIE: true,
     build: {
       scopeHoisting: true,
       vueRouterMode: 'history',
@@ -37,7 +36,7 @@ module.exports = function (ctx) {
       },
       env: ctx.dev
         ? { // dev environnment
-          API_PORT: 5252 
+          API_PORT: 5252
         }
         : { // prod environnment (build)
           API_PORT: 8443,
@@ -48,8 +47,15 @@ module.exports = function (ctx) {
         key: fs.readFileSync(__dirname+'/ssl/server.key'),
         cert: fs.readFileSync(__dirname+'/ssl/server.cert')
       },
-      host: "127.0.0.1",
+      host: "0.0.0.0",
       port: 8081,
+      proxy: {
+        '/api': {
+          target: 'https://pwndoc-backend:5252',
+          changeOrigin: true,
+          secure: false
+        }
+      }
       //open: true // opens browser window automatically
     },
     // framework: 'all' --- includes everything; for dev only!
@@ -122,6 +128,7 @@ module.exports = function (ctx) {
       ],
       // Quasar plugins
       plugins: [
+        'Cookies',
         'Dialog',
         'Loading',
         'Notify'
@@ -145,27 +152,27 @@ module.exports = function (ctx) {
         theme_color: '#027be3',
         icons: [
           {
-            'src': 'statics/icons/icon-128x128.png',
+            'src': 'favicon-pwndoc.png',
             'sizes': '128x128',
             'type': 'image/png'
           },
           {
-            'src': 'statics/icons/icon-192x192.png',
+            'src': 'favicon-pwndoc.png',
             'sizes': '192x192',
             'type': 'image/png'
           },
           {
-            'src': 'statics/icons/icon-256x256.png',
+            'src': 'favicon-pwndoc.png',
             'sizes': '256x256',
             'type': 'image/png'
           },
           {
-            'src': 'statics/icons/icon-384x384.png',
+            'src': 'favicon-pwndoc.png',
             'sizes': '384x384',
             'type': 'image/png'
           },
           {
-            'src': 'statics/icons/icon-512x512.png',
+            'src': 'favicon-pwndoc.png',
             'sizes': '512x512',
             'type': 'image/png'
           }

@@ -1,6 +1,10 @@
 import Vue from 'vue'
 
 export default {
+    getRoles: function() {
+        return Vue.prototype.$axios.get(`data/roles`)
+    },
+
     getLanguages: function() {
         return Vue.prototype.$axios.get(`data/languages`)
     },
@@ -63,6 +67,22 @@ export default {
 
     deleteVulnerabilityCategory: function(name) {
         return Vue.prototype.$axios.delete(`data/vulnerability-categories/${name}`)
+    },
+
+    getCustomFields: function() {
+        return Vue.prototype.$axios.get(`data/custom-fields`)
+    },
+
+    createCustomField: function(customField) {
+        return Vue.prototype.$axios.post(`data/custom-fields`, customField)
+    },
+
+    updateCustomFields: function(customFields) {
+        return Vue.prototype.$axios.put(`data/custom-fields/`, customFields)
+    },
+
+    deleteCustomField: function(customFieldId) {
+        return Vue.prototype.$axios.delete(`data/custom-fields/${customFieldId}`)
     },
 
     getSections: function() {

@@ -8,6 +8,22 @@ module.exports = function(app) {
     var VulnerabilityType = require('mongoose').model('VulnerabilityType');
     var VulnerabilityCategory = require('mongoose').model('VulnerabilityCategory');
     var CustomSection = require('mongoose').model('CustomSection');
+    var CustomField = require('mongoose').model('CustomField');
+
+    var _ = require('lodash')
+
+/* ===== ROLES ===== */
+
+    // Get Roles list
+    app.get("/api/data/roles", acl.hasPermission('roles:read'), function(req, res) {
+        try {
+            var result = Object.keys(acl.roles)
+            Response.Ok(res, result)
+        }
+        catch (error) {
+            Response.Internal(res, error)
+        }
+    })
 
 /* ===== LANGUAGES ===== */
 
@@ -299,6 +315,7 @@ module.exports = function(app) {
         section.locale = req.body.locale;
         // Optional parameters
         if (req.body.text) section.text = req.body.text
+        if (req.body.icon) section.icon = req.body.icon
 
         CustomSection.create(section)
         .then(msg => Response.Created(res, msg))
@@ -318,7 +335,6 @@ module.exports = function(app) {
      app.put("/api/data/sections", acl.hasPermission('sections:update'), function(req, res) {
         for (var i=0; i<req.body.length; i++) {
             var section = req.body[i]
-            console.log(section)
             if (!section.name || !section.field || !section.locale) {
                 Response.BadParameters(res, 'Missing required parameters: name, field')
                 return
@@ -331,11 +347,90 @@ module.exports = function(app) {
 
         var sections = []
         req.body.forEach(e => {
-            sections.push({locale: e.locale, name: e.name, field: e.field, text: e.text || ""})
+            sections.push({locale: e.locale, name: e.name, field: e.field, text: e.text || "", icon: e.icon || ""})
         })
 
         CustomSection.updateAll(sections)
         .then(msg => Response.Created(res, msg))
+        .catch(err => Response.Internal(res, err))
+    });
+
+/* ===== CUSTOM FIELDS ===== */
+
+    // Get custom fields
+    app.get("/api/data/custom-fields", acl.hasPermission('custom-fields:read'), function(req, res) {
+        CustomField.getAll()
+        .then(msg => Response.Ok(res, msg))
+        .catch(err => Response.Internal(res, err))
+    })
+
+    // Create custom field
+    app.post("/api/data/custom-fields", acl.hasPermission('custom-fields:create'), function(req, res) {
+        if ((!req.body.fieldType || !req.body.label || !req.body.display) && req.body.fieldType !== 'space') {
+            Response.BadParameters(res, 'Missing required parameters: fieldType, label, display')
+            return
+        }
+        if ((!utils.validFilename(req.body.fieldType) || !utils.validFilename(req.body.label)) && req.body.fieldType !== 'space') {
+            Response.BadParameters(res, 'name and field value must match /^[A-zÀ-ú0-9 \[\]\'()_-]+$/i ')
+            return
+        }
+        
+        var customField = {}
+        customField.fieldType = req.body.fieldType
+        customField.label = req.body.label
+        customField.display = req.body.display
+        if (req.body.displaySub) customField.displaySub = req.body.displaySub
+        if (req.body.size) customField.size = req.body.size
+        if (req.body.offset) customField.offset = req.body.offset
+        if (typeof req.body.required === 'boolean') customField.required = req.body.required
+        if (req.body.description) customField.description = req.body.description
+        if (req.body.text) customField.text = req.body.text
+        if (typeof req.body.position === 'number') customField.position = req.body.position
+
+        CustomField.create(customField)
+        .then(msg => Response.Created(res, msg))
+        .catch(err => Response.Internal(res, err))
+    })
+
+     // Update custom fields
+     app.put("/api/data/custom-fields", acl.hasPermission('custom-fields:update'), function(req, res) {
+        for (var i=0; i<req.body.length; i++) {
+            var customField = req.body[i]
+            if ((!customField.label || !customField._id || !customField.display) && customField.fieldType !== 'space') {
+                Response.BadParameters(res, 'Missing required parameters: _id, label, display')
+                return
+            }
+            if ((!utils.validFilename(customField.label || !utils.validFilename(customField.fieldType))) && customField.fieldType !== 'space') {
+                Response.BadParameters(res, 'label and fieldType value must match /^[A-zÀ-ú0-9 \[\]\'()_-]+$/i')
+                return
+            }
+        }
+
+        var customFields = []
+        req.body.forEach(e => {
+            var field = {_id: e._id, label: e.label, display: e.display}
+            if (typeof e.size === 'number') field.size = e.size
+            if (typeof e.offset === 'number') field.offset = e.offset
+            if (typeof e.required === 'boolean') field.required = e.required
+            if (!_.isNil(e.description)) field.description = e.description
+            if (!_.isNil(e.text)) field.text = e.text
+            if (typeof e.position === 'number') field.position = e.position
+            customFields.push(field)
+        })
+
+        console.log(customFields)
+
+        CustomField.updateAll(customFields)
+        .then(msg => Response.Created(res, msg))
+        .catch(err => Response.Internal(res, err))
+    });
+
+    // Delete custom field
+    app.delete("/api/data/custom-fields/:fieldId", acl.hasPermission('custom-fields:delete'), function(req, res) {
+        CustomField.delete(req.params.fieldId)
+        .then(msg => {
+            Response.Ok(res, msg)
+        })
         .catch(err => Response.Internal(res, err))
     });
 }

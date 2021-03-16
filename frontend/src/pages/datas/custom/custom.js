@@ -1,13 +1,18 @@
 import { Dialog, Notify } from 'quasar';
 import draggable from 'vuedraggable'
 import BasicEditor from 'components/editor';
+import CustomFields from 'components/custom-fields'
 
 import DataService from '@/services/data'
 import Utils from '@/services/utils'
+import UserService from '@/services/user'
 
 export default {
     data: () => {
         return {
+            UserService: UserService,
+            Utils: Utils,
+
             languages: [],
             newLanguage: {locale: "", language: ""},
             editLanguages: [],
@@ -24,31 +29,64 @@ export default {
             editVulnType: false,
 
             vulnCategories: [],
-            newVulnCat: {name: "", fields: []},
-            newVulnCatField: {label: "", fieldType: ""},
+            newVulnCat: {name: ""},
             editCategories: [],
             editCategory: false,
 
+            customFields: [],
+            newCustomField: {
+                label: "", 
+                fieldType: "", 
+                display: "general", 
+                displaySub: "", 
+                size: 12,
+                offset: 0,
+                required: false,
+                description: ''
+            },
+            cfDisplayOptions: [
+                {label: 'Audit General', value: 'general'},
+                {label: 'Audit Finding', value: 'finding'},
+                {label: 'Vulnerability', value: 'vulnerability'}
+            ],
+            cfComponentOptions: [
+                {label: 'Editor', value: 'text'},
+                {label: 'Input', value: 'input'},
+                {label: 'Space', value: 'space'}
+            ],
+
             sections: [],
-            newSection: {field: "", name: "", locale: ""},
+            newSection: {field: "", name: "", locale: "", icon: ""},
             editSections: [],
             editSection: false,
 
-            errors: {locale: '', language: '', auditType: '', vulnType: '', vulnCat: '', vulnCatField: '', sectionField: '', sectionName: ''}
+            errors: {locale: '', language: '', auditType: '', vulnType: '', vulnCat: '', vulnCatField: '', sectionField: '', sectionName: '', fieldLabel: '', fieldType: ''},
+
+            selectedTab: "languages",
         }
     },
 
     components: {
         BasicEditor,
+        CustomFields,
         draggable
     },
 
     mounted: function() {
-        this.getLanguages();
-        this.getAuditTypes();
-        this.getVulnerabilityTypes();
-        this.getVulnerabilityCategories();
-        this.getSections();
+        this.getLanguages()
+        this.getAuditTypes()
+        this.getVulnerabilityTypes()
+        this.getVulnerabilityCategories()
+        this.getSections()
+        this.getCustomFields()
+    },
+
+    computed: {
+        filteredCustomFields() {
+            return this.customFields.filter(field =>
+                (field.display === this.newCustomField.display && field.displayList.every(e => this.newCustomField.displayList.indexOf(e) > -1))
+            )
+        }
     },
 
     methods: {
@@ -343,18 +381,132 @@ export default {
         removeCategory: function(vulnCat) {
             this.editCategories = this.editCategories.filter(e => e.name !== vulnCat.name)
         },
-        
-        // Add Category Field
-        addCategoryField: function(vulnCat) {
-            vulnCat.fields.push(this.newVulnCatField)
-            this.newVulnCatField = {}
+
+/* ===== CUSTOM FIELDS ===== */
+
+        // Get available custom fields
+        getCustomFields: function() {
+            DataService.getCustomFields()
+            .then((data) => {
+                this.customFields = data.data.datas.filter(e => e.display)
+            })
+            .catch((err) => {
+                console.log(err)
+            })
         },
 
-        // Remove Category Field
-        removeCategoryField: function(indexCat, indexField) {
-            console.log(indexCat)
-            console.log(indexField)
-            this.editCategories[indexCat].fields.splice(indexField, 1)
+        // Create custom field
+        createCustomField: function() {
+            if (this.newCustomField.fieldType !== 'space') {
+                this.$refs['select-component'].validate()
+                this.$refs['input-label'].validate()
+
+                if (this.$refs['select-component'].hasError || this.$refs['input-label'].hasError)
+                    return
+            }
+
+            this.newCustomField.position = this.customFields.length
+            DataService.createCustomField(this.newCustomField)
+            .then((data) => {
+                this.newCustomField.label = ""
+                this.getCustomFields()
+                Notify.create({
+                    message: 'Custom Field created successfully',
+                    color: 'positive',
+                    textColor:'white',
+                    position: 'top-right'
+                })
+            })
+            .catch((err) => {
+                Notify.create({
+                    message: err.response.data.datas,
+                    color: 'negative',
+                    textColor: 'white',
+                    position: 'top-right'
+                })
+            })
+        },
+
+        // Update Custom Fields
+        updateCustomFields: function() {
+            var position = 0
+            this.customFields.forEach(e => e.position = position++)
+            DataService.updateCustomFields(this.customFields)
+            .then((data) => {
+                this.getCustomFields()
+                Notify.create({
+                    message: 'Custom Fields updated successfully',
+                    color: 'positive',
+                    textColor:'white',
+                    position: 'top-right'
+                })
+            })
+            .catch((err) => {
+                Notify.create({
+                    message: err.response.data.datas,
+                    color: 'negative',
+                    textColor: 'white',
+                    position: 'top-right'
+                })
+            })
+        },
+
+         // Delete custom field
+         deleteCustomField: function(customField) {
+            Dialog.create({
+                title: 'Confirm Suppression',
+                message: `
+                <div class="row">
+                    <div class="col-md-2">
+                        <i class="material-icons text-warning" style="font-size:42px">warning</i>
+                    </div>
+                    <div class="col-md-10">
+                        Custom Field <strong>${customField.label}</strong> will be permanently deleted.<br>
+                        This field will be removed from <strong>ALL</strong> Vulnerablities and associated data
+                        will be permanently <strong>LOST</strong>!
+                    </div>
+                </div>
+                `,
+                ok: {label: 'Confirm', color: 'negative'},
+                cancel: {label: 'Cancel', color: 'white'},
+                html: true,
+                style: "width: 600px"
+            })
+            .onOk(() => {
+                DataService.deleteCustomField(customField._id)
+                .then((data) => {
+                    this.getCustomFields()
+                    Notify.create({
+                        message: `
+                        Custom Field <strong>${customField.label}</strong> deleted successfully.<br>
+                        <strong>${data.data.datas.vulnCount}</strong> Vulnerabilities were affected.`,
+                        color: 'positive',
+                        textColor:'white',
+                        position: 'top-right',
+                        html: true
+                    })
+                })
+                .catch((err) => {
+                    console.log(err)
+                    Notify.create({
+                        message: err.response.data.datas.msg || err.response.data.datas,
+                        color: 'negative',
+                        textColor: 'white',
+                        position: 'top-right'
+                    })
+                })
+            })
+        },
+
+        canDisplayCustomField: function(field) {
+            return (
+                (this.newCustomField.display === field.display || (this.newCustomField.display === 'finding' && field.display === 'vulnerability')) && 
+                (this.newCustomField.displaySub === field.displaySub || field.displaySub === '')
+            )
+        },
+
+        canDisplayCustomFields: function() {
+            return this.customFields.some(field => this.canDisplayCustomField(field))
         },
 
 /* ===== SECTIONS ===== */
@@ -389,6 +541,7 @@ export default {
                 this.newSection.field = "";
                 this.newSection.name = "";
                 this.newSection.text = ""
+                this.newSection.icon = ""
                 this.getSections();
                 Notify.create({
                     message: 'Section created successfully',
@@ -437,13 +590,15 @@ export default {
         },
 
         cleanErrors: function() {
-            this.errors.locale = '';
-            this.errors.language = '';
-            this.errors.auditType = '';
-            this.errors.vulnType = '';
-            this.errors.vulnCat = '';
-            this.errors.sectionField = '';
-            this.errors.sectionName = '';
+            this.errors.locale = ''
+            this.errors.language = ''
+            this.errors.auditType = ''
+            this.errors.vulnType = ''
+            this.errors.vulnCat = ''
+            this.errors.fieldLabel = ''
+            this.errors.fieldType = ''
+            this.errors.sectionField = ''
+            this.errors.sectionName = ''
         }
     }
 }

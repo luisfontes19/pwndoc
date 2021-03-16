@@ -8,11 +8,12 @@ var customGenerator = require('./custom-generator');
 var utils = require('./utils');
 var html2ooxml = require('./html2ooxml')
 var _ = require('lodash');
+var Image = require('mongoose').model('Image')
 
 // Generate document with docxtemplater
-function generateDoc(audit) {
+async function generateDoc(audit) {
     var templatePath = `${__basedir}/../report-templates/${audit.template.name}.${audit.template.ext || 'docx'}`
-    var preppedAudit = prepAuditData(audit)
+    var preppedAudit = await prepAuditData(audit)
     var content = fs.readFileSync(templatePath, "binary");
 
     var zip = new JSZip(content);
@@ -27,30 +28,33 @@ function generateDoc(audit) {
         // return fs.readFileSync(tagValue, {encoding: 'base64'});
     }
     opts.getSize = function(img, tagValue, tagName) {
-        var sizeObj = sizeOf(img);
-        var width = sizeObj.width;
-        var height = sizeObj.height;
-        if (tagName === "company.logo_small") {
-            var divider = sizeObj.height / 37;
-            height = 37;
-            width = Math.floor(sizeObj.width / divider);
-        }
-        else if (tagName === "company.logo") {
-            var divider = sizeObj.height / 250;
-            height = 250;
-            width = Math.floor(sizeObj.width / divider);
-            if (width > 400) {
-                divider = sizeObj.width / 400;
-                height = Math.floor(sizeObj.height / divider);
-                width = 400;
+        if (img) {
+            var sizeObj = sizeOf(img);
+            var width = sizeObj.width;
+            var height = sizeObj.height;
+            if (tagName === "company.logo_small") {
+                var divider = sizeObj.height / 37;
+                height = 37;
+                width = Math.floor(sizeObj.width / divider);
             }
+            else if (tagName === "company.logo") {
+                var divider = sizeObj.height / 250;
+                height = 250;
+                width = Math.floor(sizeObj.width / divider);
+                if (width > 400) {
+                    divider = sizeObj.width / 400;
+                    height = Math.floor(sizeObj.height / divider);
+                    width = 400;
+                }
+            }
+            else if (sizeObj.width > 600) {
+                var divider = sizeObj.width / 600;
+                width = 600;
+                height = Math.floor(sizeObj.height / divider);
+            }
+            return [width,height];
         }
-        else if (sizeObj.width > 600) {
-            var divider = sizeObj.width / 600;
-            width = 600;
-            height = Math.floor(sizeObj.height / divider);
-        }
-        return [width,height];
+        return [0,0]
     }
     var imageModule = new ImageModule(opts);
     var doc = new Docxtemplater().attachModule(imageModule).loadZip(zip).setOptions({parser: angularParser, paragraphLoop: true});
@@ -61,10 +65,17 @@ function generateDoc(audit) {
         doc.render();
     }
     catch (error) {
+        if (error.properties.id === 'multi_error') {
+            error.properties.errors.forEach(function(err) {
+                console.log(err);
+            });
+        }
+        else
+            console.log(error)
         if (error.properties && error.properties.errors instanceof Array) {
             const errorMessages = error.properties.errors.map(function (error) {
-                return error.properties.explanation;
-            }).join("\n");
+                return `Explanation: ${error.properties.explanation}\nScope: ${JSON.stringify(error.properties.scope).substring(0,142)}...`
+            }).join("\n\n");
             // errorMessages is a humanly readable message looking like this :
             // 'The tag beginning with "foobar" is unopened'
             throw `Template Error:\n${errorMessages}`;
@@ -98,6 +109,25 @@ expressions.filters.convertDate = function(input, s) {
             return monthsShort[month] + "/" + (day<10 ? '0'+day: day) + "/" + year;
         }
     }
+}
+
+// Convert input date with parameter s (full,short): {input | convertDateLocale: 'locale':'style'}
+expressions.filters.convertDateLocale = function(input, locale, style) {
+    var date = new Date(input);
+    if (date != "Invalid Date") {
+        var options = { year: 'numeric', month: 'numeric', day: 'numeric'}
+
+        if (style === "full")
+            options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'}
+
+        return date.toLocaleDateString(locale, options)
+       
+    }
+}
+
+// Convert identifier prefix to a user defined prefix: {identifier | changeID: 'PRJ-'}
+expressions.filters.changeID = function (input, prefix) {
+    return input.replace("IDX-", prefix);
 }
 
 // Replace newlines in office XML format: {@input | NewLines}
@@ -172,11 +202,13 @@ var angularParser = function(tag) {
 // For each finding, add cvssColor, cvssObj and criteria colors parameters
 function cvssHandle(data) {
     // Header title colors
+    var noneColor = "4A86E8"; //blue
     var lowColor = "008000"; //green
     var mediumColor = "f9a009"; //yellow
     var highColor = "fe0000"; //red
     var criticalColor = "212121"; //black
 
+    var cellNoneColor = '<w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="' + noneColor + '"/></w:tcPr>';
     var cellLowColor = '<w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="'+lowColor+'"/></w:tcPr>';
     var cellMediumColor = '<w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="'+mediumColor+'"/></w:tcPr>';
     var cellHighColor = '<w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="'+highColor+'"/></w:tcPr>';
@@ -188,7 +220,8 @@ function cvssHandle(data) {
             if (data.findings[i].cvssSeverity === "Low") { data.findings[i].cvssColor = cellLowColor}
             else if (data.findings[i].cvssSeverity === "Medium") { data.findings[i].cvssColor = cellMediumColor}
             else if (data.findings[i].cvssSeverity === "High") { data.findings[i].cvssColor = cellHighColor}
-            else if (data.findings[i].cvssSeverity === "Critical") { data.findings[i].cvssColor = cellCriticalColor};
+            else if (data.findings[i].cvssSeverity === "Critical") { data.findings[i].cvssColor = cellCriticalColor}
+            else { data.findings[i].cvssColor = cellNoneColor} ;
 
             // Convert CVSS string to object in cvssObj parameter
             var cvssObj = cvssStrToObject(data.findings[i].cvssv3);
@@ -258,7 +291,7 @@ function cvssStrToObject(cvss) {
     return res
 }
 
-function prepAuditData(data) {
+async function prepAuditData(data) {
     var result = {}
     result.name = data.name || "undefined"
     result.auditType = data.auditType || "undefined"
@@ -266,9 +299,17 @@ function prepAuditData(data) {
     result.date = data.date || "undefined"
     result.date_start = data.date_start || "undefined"
     result.date_end = data.date_end || "undefined"
+    if (data.customFields) {
+        for (field of data.customFields) {
+            var fieldType = field.customField.fieldType
+            var label = field.customField.label
 
-    result.summary = []
-    if (data.summary) result.summary = splitHTMLParagraphs(data.summary)
+            if (fieldType === 'input')
+                result[_.deburr(label.toLowerCase()).replace(/\s/g, '')] = field.text
+            else if (fieldType === 'text')
+                result[_.deburr(label.toLowerCase()).replace(/\s/g, '')] = await splitHTMLParagraphs(field.text)
+        }
+    }
 
     result.company = {}
     if (data.company) {
@@ -300,35 +341,45 @@ function prepAuditData(data) {
     result.scope = data.scope || []
 
     result.findings = []
-    data.findings.forEach(finding => {
+    for (finding of data.findings) {
         var tmpFinding = {
             title: finding.title || "",
             vulnType: finding.vulnType || "",
-            description: splitHTMLParagraphs(finding.description),
-            observation: splitHTMLParagraphs(finding.observation),
-            remediation: splitHTMLParagraphs(finding.remediation),
+            description: await splitHTMLParagraphs(finding.description),
+            observation: await splitHTMLParagraphs(finding.observation),
+            remediation: await splitHTMLParagraphs(finding.remediation),
             remediationComplexity: finding.remediationComplexity || "",
             priority: finding.priority || "",
             references: finding.references || [],
             cvssv3: finding.cvssv3 || "",
             cvssScore: finding.cvssScore || "",
             cvssSeverity: finding.cvssSeverity || "",
-            poc: splitHTMLParagraphs(finding.poc),
+            poc: await splitHTMLParagraphs(finding.poc),
             affected: finding.scope || "",
             status: finding.status || "",
             category: finding.category || "",
             identifier: data.idPrefix + utils.lPad((finding.identifier || 1 ) + (data.idStart || 1) - 1)
         }
         if (finding.customFields) {
-            finding.customFields.forEach(field => {
-                if (field.fieldType === 'input')
-                    tmpFinding[_.deburr(field.label.toLowerCase()).replace(/\s/g, '')] = field.text
-                else
-                    tmpFinding[_.deburr(field.label.toLowerCase()).replace(/\s/g, '')] = splitHTMLParagraphs(field.text)
-            })
+            for (field of finding.customFields) {
+                // For retrocompatibility of findings with old customFields 
+                // or if custom field has been deleted, last saved custom fields will be available
+                if (field.customField) {
+                    var fieldType = field.customField.fieldType
+                    var label = field.customField.label
+                }
+                else {
+                    var fieldType = field.fieldType
+                    var label = field.label
+                }
+                if (fieldType === 'input')
+                    tmpFinding[_.deburr(label.toLowerCase()).replace(/\s/g, '').replace(/[^\w]/g, '_')] = field.text
+                else if (fieldType === 'text')
+                    tmpFinding[_.deburr(label.toLowerCase()).replace(/\s/g, '').replace(/[^\w]/g, '_')] = await splitHTMLParagraphs(field.text)
+            }
         }
         result.findings.push(tmpFinding)
-    })
+    }
 
     result.creator = {}
     if (data.creator) {
@@ -338,39 +389,48 @@ function prepAuditData(data) {
         result.creator.role = data.creator.role || "undefined"
     }
 
-    data.sections.forEach(section => {
+    for (section of data.sections) {
         result[section.field] = {
             name: section.name,
-            text: splitHTMLParagraphs(section.text) 
+            text: await splitHTMLParagraphs(section.text) 
         }
-    })
+    }
+
     return result
 }
 
-function splitHTMLParagraphs(data) {
+async function splitHTMLParagraphs(data) {
     var result = []
     if (!data)
         return result
 
     var splitted = data.split(/(<img.+?src=".*?".+?alt=".*?".*?>)/)
 
-    splitted.forEach((value, index) => {
+    for (value of splitted){
         if (value.startsWith("<img")) {
             var src = value.match(/<img.+src="(.*?)"/) || ""
             var alt = value.match(/<img.+alt="(.*?)"/) || ""
             if (src && src.length > 1) src = src[1]
-            if (alt && alt.length > 1) alt = alt[1]
+            if (alt && alt.length > 1) alt = _.unescape(alt[1])
+
+            if (!src.startsWith('data')){
+                try {
+                    src = (await Image.getOne(src)).value
+                } catch (error) {
+                    src = "data:image/gif;base64,R0lGODlhAQABAAAAACwAAAAAAQABAAA="
+                }
+            }
             if (result.length === 0)
                 result.push({text: "", images: []})
             result[result.length-1].images.push({image: src, caption: alt})
         }
         else if (value === "") {
-            return
+            continue
         }
         else {
             result.push({text: value, images: []})
         }
-    })
+    }
     return result
 }
 

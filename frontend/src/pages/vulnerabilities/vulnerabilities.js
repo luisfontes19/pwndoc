@@ -3,10 +3,13 @@ import { Dialog, Notify } from 'quasar';
 import BasicEditor from 'components/editor';
 import Breadcrumb from 'components/breadcrumb'
 import CvssCalculator from 'components/cvsscalculator'
+import TextareaArray from 'components/textarea-array'
+import CustomFields from 'components/custom-fields'
 
 import VulnerabilityService from '@/services/vulnerability'
 import DataService from '@/services/data'
 import UserService from '@/services/user'
+import Utils from '@/services/utils'
 
 export default {
     data: () => {
@@ -14,6 +17,8 @@ export default {
             UserService: UserService,
             // Vulnerabilities list
             vulnerabilities: [],
+            // Loading state
+            loading: true,
             // Datatable headers
             dtHeaders: [
                 {name: 'title', label: 'Title', field: 'title', align: 'left', sortable: true},
@@ -24,9 +29,15 @@ export default {
             // Datatable pagination
             pagination: {
                 page: 1,
-                rowsPerPage: 20,
+                rowsPerPage: 25,
                 sortBy: 'title'
             },
+            rowsPerPageOptions: [
+                {label:'25', value:25},
+                {label:'50', value:50},
+                {label:'100', value:100},
+                {label:'All', value:0}
+            ],
             filteredRowsCount: 0,
             // Vulnerabilities languages
             languages: [],
@@ -42,7 +53,6 @@ export default {
                 cvssSeverity: '',
                 priority: '',
                 remediationComplexity: '',
-                references: [],
                 details: [] 
             },
             currentLanguage: "",
@@ -54,7 +64,6 @@ export default {
             currentUpdate: '',
             currentUpdateLocale: '',
             vulnTypes: [],
-            referencesString: '',
             // Merge languages
             mergeLanguageLeft: '',
             mergeLanguageRight: '',
@@ -62,21 +71,26 @@ export default {
             mergeVulnRight: '',
             // Vulnerability categories
             vulnCategories: [],
-            currentCategory: null
+            currentCategory: null,
+            // Custom Fields
+            customFields: []
         }
     },
 
     components: {
         BasicEditor,
         Breadcrumb,
-        CvssCalculator
+        CvssCalculator,
+        TextareaArray,
+        CustomFields
     },
 
     mounted: function() {
-        this.getLanguages();
-        this.getVulnTypes();
-        this.getVulnerabilities();
+        this.getLanguages()
+        this.getVulnTypes()
+        this.getVulnerabilities()
         this.getVulnerabilityCategories()
+        this.getCustomFields()
     },
 
     watch: {
@@ -131,6 +145,17 @@ export default {
             })
         },
 
+         // Get available custom fields
+         getCustomFields: function() {
+            DataService.getCustomFields()
+            .then((data) => {
+                this.customFields = data.data.datas
+            })
+            .catch((err) => {
+                console.log(err)
+            })
+        },
+
         // Get Vulnerabilities types
         getVulnTypes: function() {
             DataService.getVulnerabilityTypes()
@@ -154,12 +179,20 @@ export default {
         },
 
         getVulnerabilities: function() {
+            this.loading = true
             VulnerabilityService.getVulnerabilities()
             .then((data) => {
                 this.vulnerabilities = data.data.datas
+                this.loading = false
             })
             .catch((err) => {
                 console.log(err)
+                Notify.create({
+                    message: err.response.data.datas,
+                    color: 'negative',
+                    textColor: 'white',
+                    position: 'top-right'
+                })
             })
         },
 
@@ -172,7 +205,6 @@ export default {
             if (this.errors.title)
                 return;
 
-            this.currentVulnerability.references = this.referencesString.split('\n').filter(e => e !== '')
             VulnerabilityService.createVulnerabilities([this.currentVulnerability])
             .then(() => {
                 this.getVulnerabilities();
@@ -203,7 +235,6 @@ export default {
             if (this.errors.title)
                 return;
 
-            this.currentVulnerability.references = this.referencesString.split('\n').filter(e => e !== '')
             VulnerabilityService.updateVulnerability(this.vulnerabilityId, this.currentVulnerability)
             .then(() => {
                 this.getVulnerabilities();
@@ -261,6 +292,9 @@ export default {
             VulnerabilityService.getVulnUpdates(vulnId)
             .then((data) => {
                 this.vulnUpdates = data.data.datas;
+                this.vulnUpdates.forEach(vuln => {
+                    vuln.customFields = Utils.filterCustomFields('vulnerability', this.currentVulnerability.category, this.customFields, vuln.customFields)
+                })
                 if (this.vulnUpdates.length > 0) {
                     this.currentUpdate = this.vulnUpdates[0]._id || null;
                     this.currentLanguage = this.vulnUpdates[0].locale || null;
@@ -275,32 +309,28 @@ export default {
             this.cleanCurrentVulnerability();
             
             this.currentVulnerability = this.$_.cloneDeep(row)
-            this.referencesString = ""
-            if (this.currentVulnerability.references && this.currentVulnerability.references.length > 0)
-                this.referencesString = this.currentVulnerability.references.join('\n')
             this.setCurrentDetails();
             
             this.vulnerabilityId = row._id;
-            this.getVulnUpdates(this.vulnerabilityId);
+            if (this.UserService.isAllowed('vulnerabilities:update'))
+                this.getVulnUpdates(this.vulnerabilityId);
         },
 
         editChangeCategory: function(category) {
             Dialog.create({
                 title: 'Confirm Category change',
-                message: `All present custom fields will be lost once vulnerability is updated`,
+                message: `Custom Fields display could be impacted when changing Category`,
                 ok: {label: 'Confirm', color: 'negative'},
                 cancel: {label: 'Cancel', color: 'white'}
             })
             .onOk(() => {
                 if (category){
                     this.currentVulnerability.category = category.name
-                    this.currentVulnerability.details[this.currentDetailsIndex].customFields = category.fields
                 }
                 else {
                     this.currentVulnerability.category = null
-                    this.currentVulnerability.details[this.currentDetailsIndex].customFields = []
                 }
-                // this.updateVulnerability()
+                this.setCurrentDetails()
             })
         },
 
@@ -315,7 +345,6 @@ export default {
             this.currentVulnerability.cvssSeverity = '';
             this.currentVulnerability.priority = '';
             this.currentVulnerability.remediationComplexity = '';
-            this.currentVulnerability.references = [];
             this.currentVulnerability.details = [];
             this.currentLanguage = this.dtLanguage;
             if (this.currentCategory && this.currentCategory.name) 
@@ -323,7 +352,6 @@ export default {
             else
                 this.currentVulnerability.category = null
 
-            this.referencesString = ''
             this.setCurrentDetails();
         },
 
@@ -337,29 +365,38 @@ export default {
                     vulnType: '',
                     description: '',
                     observation: '',
-                    remediation: ''
+                    remediation: '',
+                    references: [],
+                    customFields: []
                 }
-                if (this.currentCategory && this.currentCategory.fields && this.currentCategory.fields.length > 0) {
-                    details.customFields = []
-                    this.currentCategory.fields.forEach(field => {
-                        details.customFields.push({
-                            label: field.label,
-                            fieldType: field.fieldType,
-                            text: ''
-                        })
-                    })
-                }
+                details.customFields = Utils.filterCustomFields('vulnerability', this.currentVulnerability.category, this.customFields, [])
                 
                 this.currentVulnerability.details.push(details)
                 index = this.currentVulnerability.details.length - 1;
             }
+            else {
+                this.currentVulnerability.details[index].customFields = Utils.filterCustomFields('vulnerability', this.currentVulnerability.category, this.customFields, this.currentVulnerability.details[index].customFields)
+            }
             this.currentDetailsIndex = index;
         },
 
-        isTextInCustomFields: function(text) {
-            var result = false
+        isTextInCustomFields: function(field) {
+
             if (this.currentVulnerability.details[this.currentDetailsIndex].customFields) {
-                result = typeof this.currentVulnerability.details[this.currentDetailsIndex].customFields.find(f => f.text === text) === 'undefined'
+                return typeof this.currentVulnerability.details[this.currentDetailsIndex].customFields.find(f => {
+                    return f.customField === field.customField._id && f.text === field.text
+                }) === 'undefined'
+            }
+            return false
+        },
+
+        getTextDiffInCustomFields: function(field) {
+            var result = ''
+            if (this.currentVulnerability.details[this.currentDetailsIndex].customFields) {
+                this.currentVulnerability.details[this.currentDetailsIndex].customFields.find(f => {
+                    if (f.customField === field.customField._id)
+                        result = f.text
+                })
             }
             return result
         },
@@ -405,10 +442,10 @@ export default {
 
         customFilter: function(rows, terms, cols, getCellValue) {
             var result = rows && rows.filter(row => {
-                var title = this.getDtTitle(row).toLowerCase()
+                var title = this.getDtTitle(row).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
                 var type = this.getDtType(row).toLowerCase()
                 var category = (row.category || "No Category").toLowerCase()
-                var termTitle = (terms.title || "").toLowerCase()
+                var termTitle = (terms.title || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
                 var termCategory = (terms.category || "").toLowerCase()
                 var termVulnType = (terms.type || "").toLowerCase()
                 return title.indexOf(termTitle) > -1 && 
@@ -451,6 +488,14 @@ export default {
                     position: 'top-right'
                 })
             })
+        },
+
+        dblClick: function(row) {
+            this.clone(row)
+            if (this.UserService.isAllowed('vulnerabilities:update') && row.status === 2)
+                this.$refs.updatesModal.show()
+            else
+                this.$refs.editModal.show()
         }
     }
 }

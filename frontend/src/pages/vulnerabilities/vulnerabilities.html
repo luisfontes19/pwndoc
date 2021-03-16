@@ -3,8 +3,11 @@
     <div v-if="languages.length === 0" class="col-md-4 offset-md-4 q-mt-md">
         <p>No languages are defined. </br> Please create Languages in <a href="/datas/custom">Datas -> Custom Datas -> Languages</a></p>
     </div>
-    <div v-else class="col-8 offset-2 q-mt-md">
+    <div v-else class="col-md-8 col-12 offset-md-2 q-mt-md">
         <q-table
+            class="sticky-header-table"
+            card-class="bg-grey-1"
+            table-header-class="bg-grey-1"
             :columns="dtHeaders"
             :data="computedVulnerabilities"
             :filter="search"
@@ -12,7 +15,9 @@
             :pagination.sync="pagination"
             :sort-method="customSort"
             separator="none"
-            row-key="name"
+            row-key="_id"
+            :loading="loading"
+            @row-dblclick="dblClick"
         >
             <template v-slot:top>
                 <q-select 
@@ -25,12 +30,14 @@
                 map-options
                 emit-value
                 options-sanitize
+                outlined
+                bg-color="white"
                 />
                 <q-toggle label="Valid" v-model="search.valid" :true-value=0 />
                 <q-toggle label="New" color="light-blue" v-model="search.new" :true-value=1 />
                 <q-toggle label="Updates" color="orange" v-model="search.updates" :true-value=2 />
                 <q-btn 
-                v-if="UserService.isAdmin()"
+                v-if="UserService.isAllowed('vulnerabilities:update')"
                 class="q-ml-md"
                 label="Merge Vulnerabilities"
                 outline
@@ -40,7 +47,7 @@
                 />
                 <q-space />
                 <q-btn-dropdown 
-                v-if="UserService.isAdmin()"
+                v-if="UserService.isAllowed('vulnerabilities:create')"
                 unelevated
                 color="secondary"
                 no-caps
@@ -71,6 +78,9 @@
                         label="Search..."
                         v-model="search.title"
                         clearable
+                        autofocus
+                        outlined
+                        bg-color="white"
                         />
                     </q-td>
                     <q-td style="width: 20%">
@@ -82,6 +92,8 @@
                         clearable
                         :options="vulnCategoriesOptions"
                         options-sanitize
+                        outlined
+                        bg-color="white"
                         />
                     </q-td>
                     <q-td style="width: 20%">
@@ -93,6 +105,8 @@
                         clearable
                         :options="vulnTypeOptions"
                         options-sanitize
+                        outlined
+                        bg-color="white"
                         />
                     </q-td>
                     <q-td></q-td>
@@ -100,7 +114,7 @@
             </template>
 
             <template v-slot:body="props">
-                <q-tr v-if="getDtTitle(props.row) !== 'Not defined for this language yet'" :props="props" :class="(props.row.status === 1)?'bg-light-blue-2':(props.row.status === 2)?'bg-orange-2':''">
+                <q-tr @dblclick="dblClick(props.row)" v-if="getDtTitle(props.row) !== 'Not defined for this language yet'" :props="props" :class="(props.row.status === 1)?'bg-light-blue-2':(props.row.status === 2)?'bg-orange-2':''">
                     <q-td key="title" :props="props">
                         {{getDtTitle(props.row)}}
                     </q-td>
@@ -110,44 +124,48 @@
                     <q-td key="type" :props="props">
                         {{getDtType(props.row)}}
                     </q-td>
-                    <q-td key="action" :props="props" style="width:1px" v-if="UserService.isAdmin()">
-                        <q-btn size="sm" flat color="primary" icon="fa fa-edit" @click="clone(props.row); (props.row.status === 2)?$refs.updatesModal.show():$refs.editModal.show()">
+                    <q-td key="action" :props="props" style="width:1px">
+                        <q-btn v-if="UserService.isAllowed('vulnerabilities:update')" size="sm" flat color="primary" icon="fa fa-edit" @click="clone(props.row); (props.row.status === 2)?$refs.updatesModal.show():$refs.editModal.show()">
                             <q-tooltip anchor="bottom middle" self="center left" :delay="500" content-class="text-bold">Edit</q-tooltip>                                                    
+                        </q-btn>
+                        <q-btn v-else size="sm" flat color="primary" icon="fa fa-eye" @click="clone(props.row); $refs.editModal.show()">
+                            <q-tooltip anchor="bottom middle" self="center left" :delay="500" content-class="text-bold">View</q-tooltip>                            
                         </q-btn>
                         <q-btn size="sm" flat color="secondary" icon="fa fa-fingerprint" @click="goToAudits(props.row)">
                             <q-tooltip anchor="bottom middle" self="center left" :delay="500" content-class="text-bold">Find Audits</q-tooltip>                            
                         </q-btn>
-                        <q-btn size="sm" flat color="negative" icon="fa fa-trash" @click="confirmDeleteVulnerability(props.row)">
+                        <q-btn v-if="UserService.isAllowed('vulnerabilities:delete')" size="sm" flat color="negative" icon="fa fa-trash" @click="confirmDeleteVulnerability(props.row)">
                             <q-tooltip anchor="bottom middle" self="center left" :delay="500" content-class="text-bold">Delete</q-tooltip>                            
                         </q-btn>
                     </q-td>
-                    <q-td key="action" :props="props" style="width:1px" v-else>
-                        <q-btn size="sm" flat color="primary" icon="fa fa-eye" @click="clone(props.row); $refs.editModal.show()">
-                            <q-tooltip anchor="bottom middle" self="center left" :delay="500" content-class="text-bold">View</q-tooltip>                            
-                        </q-btn>
-                        <q-btn size="sm" flat color="secondary" icon="fa fa-fingerprint" @click="goToAudits(props.row)">
-                            <q-tooltip anchor="bottom middle" self="center left" :delay="500" content-class="text-bold">Find Audits</q-tooltip>    
-                        </q-btn>
-                    </q-td>
                 </q-tr>
-            </template>
-
-            <div slot="bottom" slot-scope="props" class="row fit">
-                <div class="q-table-control">
-                    <span v-if="computedVulnerabilities.length === 1">{{filteredRowsCount}} / 1 Vulnerability (Total: {{vulnerabilities.length}})</span>                
-                    <span v-else>{{filteredRowsCount}} / {{computedVulnerabilities.length}} Vulnerabilities (Total: {{vulnerabilities.length}})</span>                
-                </div>
-                <div class="q-table-control" style="position: absolute; right: 24px; height: 24px">
-                    <q-pagination input v-model="pagination.page" :max="props.pagesNumber" />            
-                </div>
-            </div>    
+            </template>          
+            
+            <template v-slot:bottom="scope">
+                <span v-if="computedVulnerabilities.length === 1">{{filteredRowsCount}} / 1 Vulnerability (Total: {{vulnerabilities.length}})</span>                
+                <span v-else>{{filteredRowsCount}} / {{computedVulnerabilities.length}} Vulnerabilities (Total: {{vulnerabilities.length}})</span>    
+                <q-space />
+                <span>Results per page:</span>
+                <q-select
+                class="q-px-md"
+                v-model="pagination.rowsPerPage"
+                :options="rowsPerPageOptions"
+                emit-value
+                map-options
+                dense
+                options-dense
+                options-cover
+                borderless
+                />
+                <q-pagination input v-model="pagination.page" :max="scope.pagesNumber" />            
+            </template> 
     
         </q-table>
     </div>
 </div>
 
 <q-dialog v-if="languages.length > 0" ref="createModal" maximized position="right" persistent @hide="cleanCurrentVulnerability()">
-    <q-card style="width: 50vw">
+    <q-card :style="($q.screen.gt.md)?'width: 50vw':''" class="bg-grey-1">
         <q-bar class="bg-primary text-white">
             <div class="q-toolbar-title">
                 <span v-if="currentCategory">Add Vulnerability ({{currentCategory.name}})</span>
@@ -169,6 +187,8 @@
                 hide-bottom-space
                 @keyup.enter="createVulnerability()"
                 v-model="currentVulnerability.details[currentDetailsIndex].title"
+                outlined
+                bg-color="white"
                 />
                 <q-select 
                 class="col-md-2"
@@ -180,6 +200,8 @@
                 emit-value 
                 map-options
                 options-sanitize
+                outlined
+                bg-color="white"
                 />
                 <q-select
                 label='Language'
@@ -192,6 +214,8 @@
                 map-options
                 emit-value
                 options-sanitize
+                outlined
+                bg-color="white"
                 />
             </div>
         </q-card-section>
@@ -239,6 +263,8 @@
                 map-options
                 emit-value
                 options-sanitize
+                outlined
+                bg-color="white"
                 />
                 <q-select
                 label="Remediation Priority"
@@ -249,37 +275,28 @@
                 map-options
                 emit-value
                 options-sanitize
+                outlined
+                bg-color="white"
                 />
             </div>
         </q-card-section>
         <q-card-section>
-            <q-input
-            label="References (One per line)"
-            stack-label
-            v-model="referencesString"
-            type="textarea"
-            />
+            <textarea-array label="References (One per line)" v-model="currentVulnerability.details[currentDetailsIndex].references" />
         </q-card-section>
 
         <q-expansion-item 
-        label="Custom Fields of the category"
-        v-if="currentVulnerability.details[currentDetailsIndex].customFields && currentVulnerability.details[currentDetailsIndex].customFields.length > 0"
+        label="Custom Fields"
         default-opened
         header-class="bg-blue-grey-5 text-white" 
-        expand-icon-class="text-white">
-            <q-card-section v-for="field of currentVulnerability.details[currentDetailsIndex].customFields" :key="field.label">
-                <q-field v-if="field.fieldType === 'text'" borderless :label="field.label" stack-label>
-                    <template v-slot="control">
-                        <basic-editor v-model="field.text" />
-                    </template>
-                </q-field>
-                <q-input
-                v-if="field.fieldType === 'input'"
-                :label='field.label'
-                stack-label
-                v-model="field.text"
-                />
-            </q-card-section>
+        expand-icon-class="text-white"
+        >
+            <custom-fields 
+            ref="customfields" 
+            v-model="currentVulnerability.details[currentDetailsIndex].customFields" 
+            :category="currentVulnerability.category" 
+            custom-element="QCardSection"
+            display="vuln"
+            />
         </q-expansion-item>
 
         <q-separator />
@@ -291,8 +308,8 @@
     </q-card>
 </q-dialog>
 
-<q-dialog v-if="languages.length > 0" ref="editModal" maximized position="right" persistent @hide="cleanCurrentVulnerability()">
-    <q-card style="width: 50vw">
+<q-dialog v-if="languages.length > 0" ref="editModal" maximized position="right" :persistent="UserService.isAllowed('vulnerabilities:update')" @hide="cleanCurrentVulnerability()">
+    <q-card :style="($q.screen.gt.md)?'width: 50vw':''" class="bg-grey-1">
         <q-bar class="bg-primary text-white">
             <div class="q-toolbar-title">
                 <span v-if="currentVulnerability.category">Edit Vulnerability ({{currentVulnerability.category}})</span>
@@ -333,6 +350,8 @@
                 hide-bottom-space
                 @keyup.enter="updateVulnerability()"
                 v-model="currentVulnerability.details[currentDetailsIndex].title"
+                outlined
+                bg-color="white"
                 />
                 <q-select 
                 class="col-md-2"
@@ -344,6 +363,8 @@
                 emit-value 
                 map-options
                 options-sanitize
+                outlined
+                bg-color="white"
                 />
                 <q-select
                 label='Language'
@@ -356,6 +377,8 @@
                 map-options
                 emit-value
                 options-sanitize
+                outlined
+                bg-color="white"
                 />
             </div>
         </q-card-section>
@@ -403,6 +426,8 @@
                 map-options
                 emit-value
                 options-sanitize
+                outlined
+                bg-color="white"
                 />
                 <q-select
                 label="Remediation Priority"
@@ -413,42 +438,30 @@
                 map-options
                 emit-value
                 options-sanitize
+                outlined
+                bg-color="white"
                 />
             </div>
         </q-card-section>
         <q-card-section>
-            <q-input
-            label="References (One per line)"
-            stack-label
-            v-model="referencesString"
-            type="textarea"
-            />
+            <textarea-array label="References (One per line)" v-model="currentVulnerability.details[currentDetailsIndex].references" />
         </q-card-section>
 
         <q-expansion-item 
-        label="Custom Fields of the category"
-        v-if="currentVulnerability.details[currentDetailsIndex].customFields && currentVulnerability.details[currentDetailsIndex].customFields.length > 0"
+        label="Custom Fields"
         default-opened
         header-class="bg-blue-grey-5 text-white" 
         expand-icon-class="text-white">
-            <q-card-section v-for="field of currentVulnerability.details[currentDetailsIndex].customFields" :key="field.label">
-                <q-field v-if="field.fieldType === 'text'" borderless :label="field.label" stack-label>
-                    <template v-slot="control">
-                        <basic-editor v-model="field.text" />
-                    </template>
-                </q-field>
-                <q-input
-                v-if="field.fieldType === 'input'"
-                :label='field.label'
-                stack-label
-                v-model="field.text"
-                />
-            </q-card-section>
+            <custom-fields 
+            ref="customfields" 
+            v-model="currentVulnerability.details[currentDetailsIndex].customFields" 
+            custom-element="QCardSection"
+            />
         </q-expansion-item>
 
         <q-separator />
 
-        <q-card-actions align="right" v-if="UserService.isAdmin()">
+        <q-card-actions align="right" v-if="UserService.isAllowed('vulnerabilities:update')">
             <q-btn color="primary" outline @click="$refs.editModal.hide()">Cancel</q-btn>
             <q-btn v-if="currentVulnerability.status === 1" label="Approve" color="light-blue" unelevated @click="updateVulnerability()" />
             <q-btn v-else color="secondary" unelevated @click="updateVulnerability()">Update</q-btn>
@@ -489,6 +502,8 @@
                         class="col-md-8"
                         v-model="currentVulnerability.details[currentDetailsIndex].title" 
                         readonly
+                        outlined
+                        bg-color="white"
                         />
                         <q-select 
                         class="col-md-2"
@@ -500,6 +515,8 @@
                         emit-value 
                         map-options
                         options-sanitize
+                        outlined
+                        bg-color="white"
                         />
                         <q-select
                         label='Language'
@@ -513,6 +530,8 @@
                         emit-value
                         readonly
                         options-sanitize
+                        outlined
+                        bg-color="white"
                         />
                     </q-card-section>
                     <q-card-section>
@@ -556,6 +575,8 @@
                         map-options
                         emit-value
                         options-sanitize
+                        outlined
+                        bg-color="white"
                         />
                         <q-select
                         label="Remediation Priority"
@@ -566,36 +587,25 @@
                         map-options
                         emit-value
                         options-sanitize
+                        outlined
+                        bg-color="white"
                         />
                     </q-card-section>
                     <q-card-section>
-                        <q-input
-                        label="References (One per line)"
-                        stack-label
-                        v-model="referencesString"
-                        type="textarea"
-                        />
+                        <textarea-array label="References (One per line)" v-model="currentVulnerability.details[currentDetailsIndex].references" />
                     </q-card-section>
 
                     <q-expansion-item 
-                    label="Custom Fields of the category"
+                    label="Custom Fields"
                     default-opened
                     header-class="bg-blue-grey-5 text-white" 
                     expand-icon-class="text-white">
                         <div v-if="currentVulnerability.details[currentDetailsIndex].customFields">
-                            <q-card-section v-for="field of currentVulnerability.details[currentDetailsIndex].customFields" :key="field.label">
-                                <q-field v-if="field.fieldType === 'text'" borderless :label="field.label" stack-label>
-                                    <template v-slot="control">
-                                        <basic-editor v-model="field.text" />
-                                    </template>
-                                </q-field>
-                                <q-input
-                                v-if="field.fieldType === 'input'"
-                                :label='field.label'
-                                stack-label
-                                v-model="field.text"
-                                />
-                            </q-card-section>
+                            <custom-fields 
+                            ref="customfields" 
+                            v-model="currentVulnerability.details[currentDetailsIndex].customFields" 
+                            custom-element="QCardSection"
+                            />
                         </div>
                     </q-expansion-item>
 
@@ -628,10 +638,12 @@
                                 class="col-md-8"
                                 v-model="update.title"
                                 readonly
+                                outlined
+                                bg-color="white"
                                 />
                                 <q-select 
                                 class="col-md-2"
-                                :bg-color="(currentVulnerability.details[currentDetailsIndex].vulnType !== update.vulnType)?'red-1':''"
+                                :bg-color="(currentVulnerability.details[currentDetailsIndex].vulnType != update.vulnType)?'red-1':'white'"
                                 label="Type"
                                 v-model="update.vulnType" 
                                 :options="vulnTypesLang" 
@@ -641,6 +653,7 @@
                                 map-options
                                 readonly
                                 options-sanitize
+                                outlined
                                 />
                                 <q-select
                                 label='Language'
@@ -654,6 +667,8 @@
                                 map-options
                                 readonly
                                 options-sanitize
+                                outlined
+                                bg-color="white"
                                 />
                             </q-card-section>
                             <q-card-section>
@@ -661,7 +676,11 @@
                                 borderless 
                                 label="Description" 
                                 stack-label
-                                :class="(currentVulnerability.details[currentDetailsIndex].description !== update.description)?'bg-red-1':''"
+                                :class="
+                                    (currentVulnerability.details[currentDetailsIndex].description || update.description) &&
+                                    (currentVulnerability.details[currentDetailsIndex].description != update.description)
+                                    ?'bg-red-1':''
+                                "
                                 readonly>
                                     <template v-slot="control">
                                         <basic-editor 
@@ -676,7 +695,11 @@
                                 borderless 
                                 label="Observation" 
                                 stack-label
-                                :class="(currentVulnerability.details[currentDetailsIndex].observation !== update.observation)?'bg-red-1':''"
+                                :class="
+                                (currentVulnerability.details[currentDetailsIndex].observation || update.observation) &&
+                                (currentVulnerability.details[currentDetailsIndex].observation != update.observation)
+                                ?'bg-red-1':''
+                                "
                                 readonly>
                                     <template v-slot="control">
                                         <basic-editor 
@@ -702,7 +725,11 @@
                                 borderless 
                                 label="Remediation" 
                                 stack-label
-                                :class="(currentVulnerability.details[currentDetailsIndex].remediation !== update.remediation)?'bg-red-1':''"
+                                :class="
+                                (currentVulnerability.details[currentDetailsIndex].remediation || update.remediation) &&
+                                (currentVulnerability.details[currentDetailsIndex].remediation != update.remediation)
+                                ?'bg-red-1':''
+                                "
                                 readonly>
                                     <template v-slot="control">
                                         <basic-editor 
@@ -714,7 +741,7 @@
                             </q-card-section>
                             <q-card-section class="q-col-gutter-md row">
                                 <q-select
-                                :bg-color="(currentVulnerability.remediationComplexity != update.remediationComplexity)?'red-1':''"
+                                :bg-color="(currentVulnerability.remediationComplexity != update.remediationComplexity)?'red-1':'white'"
                                 label="Remediation Complexity"
                                 stack-label
                                 class="col-md-6"
@@ -724,9 +751,10 @@
                                 emit-value
                                 readonly
                                 options-sanitize
+                                outlined
                                 />
                                 <q-select
-                                :bg-color="(currentVulnerability.priority != update.priority)?'red-1':''"
+                                :bg-color="(currentVulnerability.priority != update.priority)?'red-1':'white'"
                                 label="Remediation Priority"
                                 stack-label
                                 class="col-md-6"
@@ -736,11 +764,12 @@
                                 emit-value
                                 readonly
                                 options-sanitize
+                                outlined
                                 />
                             </q-card-section>
                             <q-card-section>
                                 <q-input
-                                :bg-color="!($_.isEqual(referencesString, update.references.join('\n')))?'red-1':''"
+                                :bg-color="!($_.isEqual(currentVulnerability.details[currentDetailsIndex].references, update.references))?'red-1':''"
                                 label="References (One per line)"
                                 stack-label
                                 :value="(update.references && update.references.length > 0) ? update.references.join('\n') : ''"
@@ -750,35 +779,17 @@
                             </q-card-section>
 
                             <q-expansion-item 
-                            label="Custom Fields of the category" 
+                            label="Custom Fields" 
                             default-opened
                             header-class="bg-blue-grey-5 text-white" 
                             expand-icon-class="text-white">
                                 <div v-if="update.customFields">
-                                    <q-card-section v-for="(field,idx) of update.customFields" :key="field.label">
-                                        <q-field 
-                                        v-if="field.fieldType === 'text'" 
-                                        borderless 
-                                        :label="field.label" 
-                                        stack-label
-                                        :class="(isTextInCustomFields(field.text))?'bg-red-1':''"
-                                        >
-                                            <template v-slot="control">
-                                                <basic-editor 
-                                                v-model="field.text" 
-                                                :diff="currentVulnerability.details[currentDetailsIndex].customFields[idx].text || ''"
-                                                :editable=false />
-                                            </template>
-                                        </q-field>
-                                        <q-input
-                                        v-if="field.fieldType === 'input'"
-                                        :label='field.label'
-                                        stack-label
-                                        v-model="field.text"
-                                        readonly
-                                        :bg-color="(isTextInCustomFields(field.text))?'red-1':''"
-                                        />
-                                    </q-card-section>
+                                    <custom-fields 
+                                    ref="customfields" 
+                                    v-model="update.customFields" 
+                                    custom-element="QCardSection"
+                                    :diff="currentVulnerability.details[currentDetailsIndex].customFields"
+                                    />
                                 </div>
                             </q-expansion-item>
                         </q-tab-panel>
@@ -790,7 +801,7 @@
 </q-dialog>
 
 <q-dialog persistent ref="mergeModal">
-    <q-card  style="width: 1000px; max-width: 1000px; height: 60vh">
+    <q-card style="width: 1000px; max-width: 1000px; height: 60vh" class="bg-grey-1">
         <q-bar class="bg-primary text-white">
             <span>Merge Vulnerabilities</span>
             <q-space />
@@ -804,7 +815,7 @@
             </q-card-section>
         </div>
         <div v-else class="row">
-            <div class="col-md-6">
+            <div class="col-md-6 col-6">
                 <q-card-section class="col-md-6">
                     <q-select
                     label='Language (Add from right)'
@@ -816,6 +827,8 @@
                     emit-value
                     @input="mergeVulnLeft = ''"
                     options-sanitize
+                    outlined
+                    bg-color="white"
                     />
                 </q-card-section>
                 <q-card-section class="card-section-merge">
@@ -846,6 +859,8 @@
                     emit-value
                     @input="mergeVulnRight = ''"
                     options-sanitize
+                    outlined
+                    bg-color="white"
                     />
                 </q-card-section>
                 <q-card-section class="card-section-merge">

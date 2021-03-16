@@ -1,8 +1,8 @@
 /* 
   3 Users at the end:
     admin:admin2 (admin)
-    report:report (report)
     user2:user2 (user)
+    report:report (report)
 */
 
 module.exports = function(request) {
@@ -84,7 +84,7 @@ module.exports = function(request) {
       
         expect(response.status).toBe(200)
         expect(response.data.datas.token).toBeDefined()
-        options.headers.Authorization = response.data.datas.token // Set header Authentication for next requests
+        options.headers.Cookie = `token=${response.data.datas.token}` // Set header Cookie for next requests
         done()
       })
 
@@ -205,11 +205,12 @@ module.exports = function(request) {
           firstname: 'User2',
           password: 'user2',
         }
-        var response = await request.put('/api/users/user', user, options)
-        expect(response.status).toBe(200)
 
-        var response = await request.get('/api/users/user', options)
-        expect(response.status).toBe(404)
+        var userRequest = await request.get('/api/users/user', options)
+        var userId = userRequest.data.datas._id
+
+        var response = await request.put(`/api/users/${userId}`, user, options)
+        expect(response.status).toBe(200)
 
         var response = await request.get('/api/users/user2', options)
         expect(response.data.datas).toEqual(expect.objectContaining(expected))
@@ -217,10 +218,13 @@ module.exports = function(request) {
       })
 
       it('Delete user', async done => {
-        var response = await request.delete('/api/users/notdefineduser', options)
+        var userRequest = await request.get('/api/users/tmpuser', options)
+        var userId = userRequest.data.datas._id
+
+        var response = await request.delete('/api/users/deadbeefdeadbeefdeadbeef', options)
         expect(response.status).toBe(404)
 
-        var response = await request.delete('/api/users/tmpuser', options)
+        var response = await request.delete(`/api/users/${userId}`, options)
         expect(response.status).toBe(200)
 
         var response = await request.get('/api/users/tmpuser', options)

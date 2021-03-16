@@ -1,6 +1,8 @@
 import { Notify, Dialog } from 'quasar';
 
 import Breadcrumb from 'components/breadcrumb';
+import TextareaArray from 'components/textarea-array'
+import CustomFields from 'components/custom-fields'
 
 import AuditService from '@/services/audit';
 import ClientService from '@/services/client';
@@ -8,6 +10,7 @@ import CompanyService from '@/services/company';
 import CollabService from '@/services/collaborator';
 import TemplateService from '@/services/template';
 import DataService from '@/services/data';
+import Utils from '@/services/utils';
 
 export default {
     data: () => {
@@ -16,20 +19,22 @@ export default {
             auditId: null,
             // Current editing audit object
             audit: {
-                // name: "",
-                // location: "",
-                // auditType: "",
-                // client: {},
-                // company: {},
-                // collaborators: [],
-                // date: "",
-                // date_start: "",
-                // date_end: "",
-                // scope: [],
-                // language: "",
-                // template: "",
-                // idPrefix: ""
-                // idStart: 1
+                creator: {},
+                name: "",
+                location: "",
+                auditType: "",
+                client: {},
+                company: {},
+                collaborators: [],
+                date: "",
+                date_start: "",
+                date_end: "",
+                scope: [],
+                language: "",
+                template: "",
+                customFields: [],
+				idPrefix: "",
+                idStart: 1
             },
             auditOrig: {},
             // List of existing clients
@@ -46,18 +51,21 @@ export default {
             languages: [],
             // List of existing audit types
             auditTypes: [],
+            // List of CustomFields
+            customFields: []
         }
     },
 
     components: {
-        Breadcrumb
+        Breadcrumb,
+        TextareaArray,
+        CustomFields
     },
 
     mounted: function() {
         this.auditId = this.$route.params.auditId;
         this.getAuditGeneral();
         this.getClients();
-        this.getCollaborators();
         this.getTemplates();
         this.getLanguages();
         this.getAuditTypes();
@@ -74,6 +82,7 @@ export default {
     },
 
     beforeRouteLeave (to, from , next) {
+        Utils.syncEditors(this.$refs)
         if (this.$_.isEqual(this.audit, this.auditOrig))
             next();
         else {
@@ -103,10 +112,16 @@ export default {
 
         // Get Audit datas from uuid
         getAuditGeneral: function() {
-            AuditService.getAuditGeneral(this.auditId)
+            DataService.getCustomFields()
+            .then((data) => {
+                this.customFields = data.data.datas
+                return AuditService.getAuditGeneral(this.auditId)
+            })
             .then((data) => {
                 this.audit = data.data.datas;
+                this.audit.customFields = Utils.filterCustomFields('audit-general', '', this.customFields, this.audit.customFields)
                 this.auditOrig = this.$_.cloneDeep(this.audit);
+                this.getCollaborators()
             })
             .catch((err) => {              
                 console.log(err.response)
@@ -115,22 +130,34 @@ export default {
 
         // Save Audit
         updateAuditGeneral: function() {
-            AuditService.updateAuditGeneral(this.auditId, this.audit)
-            .then(() => {
-                this.auditOrig = this.$_.cloneDeep(this.audit);
-                Notify.create({
-                    message: 'Audit updated successfully',
-                    color: 'positive',
-                    textColor:'white',
-                    position: 'top-right'
+            Utils.syncEditors(this.$refs)
+            this.$nextTick(() => {
+                if (this.$refs.customfields && this.$refs.customfields.requiredFieldsEmpty()) {
+                    Notify.create({
+                        message: 'Please fill all required Fields',
+                        color: 'negative',
+                        textColor:'white',
+                        position: 'top-right'
+                    })
+                    return
+                }
+                AuditService.updateAuditGeneral(this.auditId, this.audit)
+                .then(() => {
+                    this.auditOrig = this.$_.cloneDeep(this.audit);
+                    Notify.create({
+                        message: 'Audit updated successfully',
+                        color: 'positive',
+                        textColor:'white',
+                        position: 'top-right'
+                    })
                 })
-            })
-            .catch((err) => {
-                Notify.create({
-                    message: err.response.data.datas,
-                    color: 'negative',
-                    textColor:'white',
-                    position: 'top-right'
+                .catch((err) => {
+                    Notify.create({
+                        message: err.response.data.datas,
+                        color: 'negative',
+                        textColor:'white',
+                        position: 'top-right'
+                    })
                 })
             })
         },
@@ -164,7 +191,10 @@ export default {
         getCollaborators: function() {
             CollabService.getCollabs()
             .then((data) => {
-                this.collaborators = data.data.datas;
+                var creatorId = ""
+                if (this.audit.creator)
+                    creatorId = this.audit.creator._id
+                this.collaborators = data.data.datas.filter(e => e._id !== creatorId)
             })
             .catch((err) => {
                 console.log(err)
