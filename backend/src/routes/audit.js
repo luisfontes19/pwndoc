@@ -110,7 +110,8 @@ module.exports = function(app, io) {
         if (req.body.scope && typeof(req.body.scope === "array")) {
             update.scope = req.body.scope.map(item => {return {name: item}});
         }
-        if (req.body.template) update.template = req.body.template;        
+        if (req.body.template) update.template = req.body.template;
+        if (req.body.customFields) update.customFields = req.body.customFields
 
         Audit.updateGeneral(acl.isAllowed(req.decodedToken.role, 'audits:update-all'), req.params.auditId, req.decodedToken.id, update)
         .then(msg => {
@@ -286,8 +287,8 @@ module.exports = function(app, io) {
     // Generate Report for specific audit
     app.get("/api/audits/:auditId/generate", acl.hasPermission('audits:read'), function(req, res){
         Audit.getAudit(acl.isAllowed(req.decodedToken.role, 'audits:read-all'), req.params.auditId, req.decodedToken.id)
-        .then( audit => {
-            var reportDoc = reportGenerator.generateDoc(audit);
+        .then( async audit => {
+            var reportDoc = await reportGenerator.generateDoc(audit);
             Response.SendFile(res, `${audit.name}.${audit.template.ext || 'docx'}`, reportDoc);
         })
         .catch(err => {

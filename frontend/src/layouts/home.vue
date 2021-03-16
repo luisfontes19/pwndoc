@@ -2,7 +2,7 @@
   <q-layout ref="layout" view="hHr LpR lFf" class="home-background">
     <q-header>
         <q-toolbar color="primary">
-            <img src="statics/pwndoc-logo-white.png" style="max-height:50px;" />
+            <img src="pwndoc-logo-white.png" style="max-height:50px;" />
             
             <q-item to='/audits' active-class="text-green">
             <q-item-section avatar style="min-width:0" class="q-pr-sm">
@@ -22,7 +22,7 @@
             <q-item-section avatar style="min-width:0" class="q-pr-sm">
                 <q-icon name="fa fa-database" />
             </q-item-section>
-            <q-item-section>Datas</q-item-section>
+            <q-item-section>Data</q-item-section>
             </q-item>
 
             <q-space />
@@ -62,7 +62,6 @@ export default {
     methods: {
         logout: function() {
             UserService.destroyToken();
-            this.$router.push('/login');
         }
     }
 }

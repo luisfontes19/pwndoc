@@ -9,8 +9,6 @@ var Paragraph = {
 var customField = {
     _id:        false,
     customField:  {type: Schema.Types.ObjectId, ref: 'CustomField'},
-    label:      String,
-    fieldType:  String,
     text:       String
 }
 
@@ -67,7 +65,8 @@ var AuditSchema = new Schema({
     findings:           [Finding],
     template:           {type: Schema.Types.ObjectId, ref: 'Template'},
     creator:            {type: Schema.Types.ObjectId, ref: 'User'},
-    sections:           [{field: String, name: String, text: String}]
+    sections:           [{field: String, name: String, text: String}],
+    customFields:       [customField]
 
 }, {timestamps: true});
 
@@ -106,6 +105,7 @@ AuditSchema.statics.getAudit = (isAdmin, auditId, userId) => {
         query.populate('company')
         query.populate('client')
         query.populate('collaborators', 'username firstname lastname role')
+        query.populate('customFields.customField', 'label fieldType text')
         query.populate({
             path: 'findings',
             populate: {
@@ -117,7 +117,6 @@ AuditSchema.statics.getAudit = (isAdmin, auditId, userId) => {
         .then((row) => {
             if (!row)
                 throw({fn: 'NotFound', message: 'Audit not found or Insufficient Privileges'})
-
             resolve(row)
         })
         .catch((err) => {
@@ -187,9 +186,10 @@ AuditSchema.statics.getGeneral = (isAdmin, auditId, userId) => {
                 path: 'company', 
                 select: 'name'}
             });
+        query.populate('creator', 'username firstname lastname')
         query.populate('collaborators', 'username firstname lastname')
         query.populate('company')
-        query.select('id name auditType location date date_start date_end client collaborators language scope.name template')
+        query.select('id name auditType location date date_start date_end client collaborators language scope.name template customFields')
         query.exec()
         .then((row) => {
             if (!row)
@@ -380,7 +380,7 @@ AuditSchema.statics.updateFinding = (isAdmin, auditId, userId, findingId, newFin
         })
         .then(() => {
             return Audit
-            .findByIdAndUpdate(auditId, {$push: {findings: {$each: [], $sort: {cvssScore: -1}}}})
+            .findByIdAndUpdate(auditId, {$push: {findings: {$each: [], $sort: {cvssScore: -1, priority: -1}}}})
             .collation({locale: "en_US", numericOrdering: true})
         })
         .then(() => {

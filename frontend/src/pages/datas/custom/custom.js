@@ -1,6 +1,7 @@
 import { Dialog, Notify } from 'quasar';
 import draggable from 'vuedraggable'
 import BasicEditor from 'components/editor';
+import CustomFields from 'components/custom-fields'
 
 import DataService from '@/services/data'
 import Utils from '@/services/utils'
@@ -10,6 +11,7 @@ export default {
     data: () => {
         return {
             UserService: UserService,
+            Utils: Utils,
 
             languages: [],
             newLanguage: {locale: "", language: ""},
@@ -32,21 +34,42 @@ export default {
             editCategory: false,
 
             customFields: [],
-            newCustomField: {label: "", fieldType: "", vulnerability: false, finding: false, categories: [], values: []},
-            editCustomFields: [],
-            editCustomField: false,
+            newCustomField: {
+                label: "", 
+                fieldType: "", 
+                display: "general", 
+                displaySub: "", 
+                size: 12,
+                offset: 0,
+                required: false,
+                description: ''
+            },
+            cfDisplayOptions: [
+                {label: 'Audit General', value: 'general'},
+                {label: 'Audit Finding', value: 'finding'},
+                {label: 'Vulnerability', value: 'vulnerability'}
+            ],
+            cfComponentOptions: [
+                {label: 'Editor', value: 'text'},
+                {label: 'Input', value: 'input'},
+                {label: 'Space', value: 'space'},
+                { label: 'List', value: 'list' }
+            ],
 
             sections: [],
             newSection: {field: "", name: "", locale: "", icon: ""},
             editSections: [],
             editSection: false,
 
-            errors: {locale: '', language: '', auditType: '', vulnType: '', vulnCat: '', vulnCatField: '', sectionField: '', sectionName: '', fieldLabel: '', fieldType: ''}
+            errors: {locale: '', language: '', auditType: '', vulnType: '', vulnCat: '', vulnCatField: '', sectionField: '', sectionName: '', fieldLabel: '', fieldType: ''},
+
+            selectedTab: "languages",
         }
     },
 
     components: {
         BasicEditor,
+        CustomFields,
         draggable
     },
 
@@ -57,6 +80,14 @@ export default {
         this.getVulnerabilityCategories()
         this.getSections()
         this.getCustomFields()
+    },
+
+    computed: {
+        filteredCustomFields() {
+            return this.customFields.filter(field =>
+                (field.display === this.newCustomField.display && field.displayList.every(e => this.newCustomField.displayList.indexOf(e) > -1))
+            )
+        }
     },
 
     methods: {
@@ -358,7 +389,7 @@ export default {
         getCustomFields: function() {
             DataService.getCustomFields()
             .then((data) => {
-                this.customFields = data.data.datas
+                this.customFields = data.data.datas.filter(e => e.display)
             })
             .catch((err) => {
                 console.log(err)
@@ -373,15 +404,15 @@ export default {
 
         // Create custom field
         createCustomField: function() {
-            this.cleanErrors();
-            if (!this.newCustomField.label)
-                this.errors.fieldLabel = "Label required"
-            if (!this.newCustomField.fieldType)
-                this.errors.fieldType = "Field Type required"
-            
-            if (this.errors.fieldLabel || this.errors.fieldType)
-                return;
+            if (this.newCustomField.fieldType !== 'space') {
+                this.$refs['select-component'].validate()
+                this.$refs['input-label'].validate()
 
+                if (this.$refs['select-component'].hasError || this.$refs['input-label'].hasError)
+                    return
+            }
+
+            this.newCustomField.position = this.customFields.length
             DataService.createCustomField(this.newCustomField)
             .then((data) => {
                 this.newCustomField.label = ""
@@ -406,11 +437,10 @@ export default {
         // Update Custom Fields
         updateCustomFields: function() {
             var position = 0
-            this.editCustomFields.forEach(e => e.position = position++)
-            DataService.updateCustomFields(this.editCustomFields)
+            this.customFields.forEach(e => e.position = position++)
+            DataService.updateCustomFields(this.customFields)
             .then((data) => {
                 this.getCustomFields()
-                this.editCustomField = false
                 Notify.create({
                     message: 'Custom Fields updated successfully',
                     color: 'positive',
@@ -453,7 +483,6 @@ export default {
                 DataService.deleteCustomField(customField._id)
                 .then((data) => {
                     this.getCustomFields()
-                    this.editCustomField = false
                     Notify.create({
                         message: `
                         Custom Field <strong>${customField.label}</strong> deleted successfully.<br>
@@ -476,9 +505,15 @@ export default {
             })
         },
 
-        checkDisplay: function(customField) {
-            if (customField.displayVuln && !customField.displayFinding)
-                customField.displayFinding = true
+        canDisplayCustomField: function(field) {
+            return (
+                (this.newCustomField.display === field.display || (this.newCustomField.display === 'finding' && field.display === 'vulnerability')) && 
+                (this.newCustomField.displaySub === field.displaySub || field.displaySub === '')
+            )
+        },
+
+        canDisplayCustomFields: function() {
+            return this.customFields.some(field => this.canDisplayCustomField(field))
         },
 
 /* ===== SECTIONS ===== */
