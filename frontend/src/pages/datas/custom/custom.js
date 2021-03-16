@@ -396,10 +396,12 @@ export default {
             })
         },
 
-        addCustomFieldListValue: function (customFieldIndex) {
-            var field = this.customFields[customFieldIndex]
-            field.values.push("")
-            this.$set(this.customFields, customFieldIndex, field)
+        addCustomFieldListValue: function (field, newOption) {
+            if(!field.values) field.values = [];
+            field.values.push(newOption);
+            // var field = this.customFields[customFieldIndex]
+            // field.values.push("")
+            // this.$set(this.customFields, customFieldIndex, field)
         },
 
         // Create custom field
@@ -411,7 +413,12 @@ export default {
                 if (this.$refs['select-component'].hasError || this.$refs['input-label'].hasError)
                     return
             }
+            console.log(1)
 
+            if (this.newCustomField.fieldType === 'list')
+                this.newCustomField.values = [];
+            else
+            console.log(2)
             this.newCustomField.position = this.customFields.length
             DataService.createCustomField(this.newCustomField)
             .then((data) => {

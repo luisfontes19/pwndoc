@@ -386,6 +386,7 @@ module.exports = function(app) {
         if (req.body.description) customField.description = req.body.description
         if (req.body.text) customField.text = req.body.text
         if (typeof req.body.position === 'number') customField.position = req.body.position
+        if (req.body.values) customField.values = req.body.values
 
         CustomField.create(customField)
         .then(msg => Response.Created(res, msg))
@@ -415,6 +416,7 @@ module.exports = function(app) {
             if (!_.isNil(e.description)) field.description = e.description
             if (!_.isNil(e.text)) field.text = e.text
             if (typeof e.position === 'number') field.position = e.position
+            field.values = e.values //TODO: validate this
             customFields.push(field)
         })
 
